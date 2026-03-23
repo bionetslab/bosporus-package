@@ -2,4 +2,4 @@
 
 Distance functions:
 
-![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.jpg?raw=true)
+![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.svg?raw=true)
