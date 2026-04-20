@@ -13,20 +13,24 @@ def compute_centrality_measures(edge_list, N, measures=["degree", "closeness", "
     
     results = dict()
     for m in measures: 
-        if m == "degree":
-            results["degree"] = g.get_total_degrees(range(g.num_vertices())).copy()
-        elif m == "pagerank":
-            results["pagerank"] = pagerank(g).a.copy()
-        elif m == "betweenness":
-            results["betweenness"] = betweenness(g)[0].a.copy()
-        elif m == "closeness":
-            results["closeness"] = closeness(g).a.copy()
-        elif m == "harmonic":
-            results["harmonic"] = closeness(g, harmonic=True).a.copy()
-        elif m == "clustering":
-            results["clustering"] = local_clustering(g).a.copy()
-        else:
-            raise ValueError(f"Unknown centrality measure: {m}")
+        try:
+            if m == "degree":
+                results["degree"] = g.get_total_degrees(range(g.num_vertices())).copy()
+            elif m == "pagerank":
+                results["pagerank"] = pagerank(g).a.copy()
+            elif m == "betweenness":
+                results["betweenness"] = betweenness(g)[0].a.copy()
+            elif m == "closeness":
+                results["closeness"] = closeness(g).a.copy()
+            elif m == "harmonic":
+                results["harmonic"] = closeness(g, harmonic=True).a.copy()
+            elif m == "clustering":
+                results["clustering"] = local_clustering(g).a.copy()
+            else:
+                raise ValueError(f"Unknown centrality measure: {m}")
+        except Exception as e:
+            print(f"Error computing {m}: {e}")
+
     
     for key in results:
         arr = results[key]

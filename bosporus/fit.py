@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
-from evaluate_fit import log_likelihood, akaike_information_criterion
+from .evaluate_fit import log_likelihood, akaike_information_criterion
 
 
 class Fit():
@@ -15,6 +15,7 @@ class Fit():
         self.effect_strength = 0
         self.relative_support = 0
         self.sign_border_effect = 0
+        self.name = None
 
     
     def _fit_properties(self):
@@ -41,9 +42,10 @@ class Fit():
 
     
 class ConstantFit(Fit):
-    def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series):
+    def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series = None):
         super().__init__(C_true, d)
-        
+        self.name = "Constant Fit"
+    
     
     def _fit_properties(self):
         return
@@ -57,6 +59,7 @@ class ConstantFit(Fit):
         c, C_model = self._fit_constant(self.C_true)
         self.C_model = C_model
         self.params = {"c": c}
+        self._fit_properties()
         self.score()
         return
         
@@ -69,6 +72,8 @@ class ConstantFit(Fit):
 class PiecewiseLinearFit(Fit):
     def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series):
         super().__init__(C_true, d)
+        self.name = "Piecewise Linear Fit"
+        
     
     @staticmethod
     def piecewise_plateau(d, b, m, c0):
@@ -105,6 +110,7 @@ class PiecewiseLinearFit(Fit):
         m_opt, c0_opt, b_opt, C_fit = self._fit_piece_wise_linear()
         self.params = {"b": b_opt, "m": m_opt, "c0": c0_opt}
         self.C_model = C_fit
+        self._fit_properties()
         self.score()
         return
     
@@ -112,6 +118,7 @@ class PiecewiseLinearFit(Fit):
 class ExponentialSaturationFit(Fit):
     def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series):
         super().__init__(C_true, d)
+        self.name = "Exponential Saturation Fit"
         
     @staticmethod
     def exp_sat(d, a, b, c):
@@ -119,8 +126,8 @@ class ExponentialSaturationFit(Fit):
     
         
     def _fit_properties(self):
-        self.sign_border_effect = 1 if self.params["m"] > 0 else -1
         self.effect_strength = -self.params["a"] / (self.params["a"] + self.params["c"])
+        self.sign_border_effect = 1 if self.effect_strength > 0 else -1
         self.relative_support = (-np.log(0.05) / self.params["b"]) / np.max(self.d) # point where it reaches 95% of the saturation level
         return 
     
@@ -139,8 +146,53 @@ class ExponentialSaturationFit(Fit):
         a_opt, b_opt, c_opt, C_fit = self._fit_exponential_saturation()
         self.params = {"a": a_opt, "b": b_opt, "c": c_opt}
         self.C_model = C_fit
+        self._fit_properties()
         self.score()
         return
+
+
+class MichaelisMentenFit(Fit):
+    def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series):
+        super().__init__(C_true, d)
+        self.name = "Michaelis-Menten Fit"
+        
+        
+    @staticmethod
+    def michaelis_menten(d, a, b, c):
+        return a * d / (b + d) + c
+    
+        
+    def _fit_properties(self):
+        self.sign_border_effect = 1 if self.params["a"] > 0 else -1
+        baseline = self.params["a"] + self.params["c"]
+        self.effect_strength = -self.params["a"] / baseline if baseline != 0 else 0
+        return 
+    
+    
+    def _fit_michaelis_menten(self):
+        # Initial guesses:
+        # a: range of values
+        # b: median distance (assuming half-saturation happens somewhere in the ROI)
+        # c: minimum observed value
+        p0 = [np.max(self.C_true) - np.min(self.C_true), np.median(self.d), np.min(self.C_true)]
+        
+        # Adding bounds to keep 'b' positive (distance) to avoid division by zero or negative asymptotes
+        bounds = ([-np.inf, 1e-6, -np.inf], [np.inf, np.inf, np.inf])
+
+        popt, _ = curve_fit(self.michaelis_menten, self.d, self.C_true, p0=p0, bounds=bounds, maxfev=10000)
+        a_opt, b_opt, c_opt = popt
+        C_fit = self.michaelis_menten(self.d, a_opt, b_opt, c_opt)
+        return a_opt, b_opt, c_opt, C_fit
+
+
+    def fit(self):
+        a_opt, b_opt, c_opt, C_fit = self._fit_michaelis_menten()
+        self.params = {"a": a_opt, "b": b_opt, "c": c_opt}
+        self.C_model = C_fit
+        self._fit_properties() # Ensure properties are calculated after params are set
+        self.score()
+        return
+    
     
     
 # TODO: 2D versions of these models for future work

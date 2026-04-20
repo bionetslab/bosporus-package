@@ -14,7 +14,9 @@ classifiers = [
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 dependencies = ["scikit-learn",
-                "scipy"]
+                "scipy",
+                "numpy",
+                "pandas"]
 
 
 [project.urls]
