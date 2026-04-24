@@ -27,3 +27,8 @@ Issues = "https://github.com/bionetslab/bosporus-package/issues"
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
+
+[tool.uv.workspace]
+members = [
+    "bosporus-package",
+]

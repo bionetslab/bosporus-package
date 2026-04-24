@@ -10,9 +10,9 @@ class BosporusFlow():
     def __init__(self, coordinates: np.ndarray):
         self.coordinates = coordinates
         self.df = pd.DataFrame(index=range(len(coordinates)))
-        self.fits = list()
+        self.best_fits = None
         self.fit_quality = None
-    
+        self.best_fits = dict()
     
 
     def run_all(self, graph_type, params, distance_function, distance_key=None, measures=["degree", "closeness", "betweenness", "harmonic", "clustering", "pagerank"], fits=[ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit], calculate_rel_ll_to_baseline=ConstantFit):
@@ -20,7 +20,7 @@ class BosporusFlow():
         self.compute_centralities(measures=measures)
         distance_key = distance_function(distance_key=distance_key)
         self.fit_models(measures=measures, distance_key=distance_key, fits=fits, calculate_rel_ll_to_baseline=calculate_rel_ll_to_baseline)
-        return
+        return self.best_fits
     
     
     def construct_graph(self, graph_type, params=None):
@@ -82,7 +82,7 @@ class BosporusFlow():
         fits=[ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit],
         calculate_rel_ll_to_baseline=ConstantFit
     ):
-        self.fits = dict()
+        self.best_fits = dict()
         fit_quality_data = []
 
         d = self.df[distance_key].values
@@ -110,7 +110,6 @@ class BosporusFlow():
                         baseline_name = name
                         baseline_aic = fit_instance.AIC
 
-                self.fits[measure] = measure_fits
 
                 # Best fit (still among all models)
                 best_fit_name, best_fit = min(measure_fits, key=lambda x: x[1].AIC)
@@ -142,6 +141,7 @@ class BosporusFlow():
                 }
                 
                 row.update(best_fit.params)  # Add best fit parameters to the row
+                self.best_fits[measure] = best_fit
                 
                 # Add per-model metrics (order-independent)
                 for name in rel_ll:
