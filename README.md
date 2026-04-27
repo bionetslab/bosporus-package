@@ -49,12 +49,10 @@ conda install graph-tool -c conda-forge
 | **Fit model** | A parametric curve (constant, piecewise-linear, exponential saturation, Michaelis-Menten) fitted to `centrality ~ distance`. The best model is selected by AIC. |
 | **Correction** | The best-fit model is used to normalize each node's centrality to what it would be in the interior. |
 
----
-
-Distance functions:
+Distance functions:   
 ![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.svg?raw=true)
 
-
+---
 ## Quick-start: one-liner with `run_all`
 
 ```python
