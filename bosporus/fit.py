@@ -10,8 +10,10 @@ _EPS = 1e-10
 class Fit():
     def __init__(self, C_true: pd.DataFrame | pd.Series, d: pd.DataFrame | pd.Series):
         mask = np.isfinite(C_true) & np.isfinite(d)
-        self._C_true = C_true[mask]
-        self._d = d[mask]
+        self._C_true_original = C_true.copy()  # Original data with full index
+        self._mask = mask.copy()  # Store the mask
+        self._C_true = C_true[mask].copy()
+        self._d = d[mask].copy()
         self._included_samples = np.sum(mask) / len(mask)
         self._AIC = np.inf
         self._log_likelihood = -np.inf
@@ -91,19 +93,40 @@ class Fit():
     @property
     def C_corrected(self):
         """Read-only access to C_corrected."""
-        return self._C_corrected
+        if self._C_corrected is None:
+            return None
+        return self._expand_to_original_index(self._C_corrected)
+    
+    def _expand_to_original_index(self, filtered_data):
+        """Expand filtered data back to original index."""
+        if isinstance(self._C_true_original, pd.DataFrame):
+            result = pd.DataFrame(np.nan, index=range(len(self._C_true_original)), columns=self._C_true_original.columns)
+            result[self._mask] = filtered_data
+            return result
+        else:  # pd.Series
+            result = pd.Series(np.nan, index=range(len(self._C_true_original)), dtype=filtered_data.dtype)
+            result[self._mask] = filtered_data
+            return result
 
     def _rate_observed_metrics(self):
         """Calculate observed_effect_strength and observed_half_life.
         Subclasses should implement this method."""
         raise NotImplementedError("Subclasses should implement this method")
 
-    def fit_correct(self):
+    def fit(self):
         raise NotImplementedError("Subclasses should implement this method")
+
+    def correct(self):
+        raise NotImplementedError("Subclasses should implement this method")
+    
+    def fit_correct(self):
+        self.fit()
+        if self.converged:
+            self.correct()
+        return self.C_corrected
 
     def fraction_not_converged(self, threshold: float = 0.95) -> float:
         raise NotImplementedError("Subclasses should implement this method")
-
 
     def score(self):
         if self.C_model is None:
@@ -128,13 +151,18 @@ class ConstantFit(Fit):
         self._observed_effect_strength = 0
         self._observed_half_life = 0
 
-    def fit_correct(self):
+    def fit(self):
         c, C_model = self._fit_constant(self.C_true)
         self._C_model = C_model
         self._C_corrected = self.C_true
         self._params = {"constant_c": c}
         self._rate_observed_metrics()
         self.score()
+
+    def correct(self):
+        """Constant fit does not change the data."""
+        self._C_corrected = self.C_true
+        return self.C_corrected
 
     def fraction_not_converged(self, threshold: float = 0.95) -> float:
         """
@@ -175,7 +203,7 @@ class PiecewiseLinearFit(Fit):
         C_fit = self.piecewise_plateau(self.d, b_opt, m_opt, c_opt)
         return m_opt, c_opt, b_opt, C_fit
 
-    def fit_correct(self):
+    def fit(self):
         try:
             m_opt, c_opt, b_opt, C_fit = self._fit_piece_wise_linear()
             self._params = {"piecewise_linear_b": b_opt, "piecewise_linear_m": m_opt, "piecewise_linear_c": c_opt}
@@ -187,8 +215,13 @@ class PiecewiseLinearFit(Fit):
         self._rate_observed_metrics()
         if self.converged:
             self.score()
-            self._C_corrected = self.C_true + self.params["piecewise_linear_m"] * self.params["piecewise_linear_b"] + self.params["piecewise_linear_c"] - self.C_model
 
+    def correct(self):
+        if self._converged:
+            self._C_corrected = self.C_true + self.params["piecewise_linear_m"] * self.params["piecewise_linear_b"] + self.params["piecewise_linear_c"] - self.C_model
+        else:
+            self._C_corrected = self.C_true
+        return self.C_corrected
 
     def fraction_not_converged(self, threshold: float = 0.95) -> float:
         """
@@ -240,7 +273,7 @@ class ExponentialSaturationFit(Fit):
         C_fit = self.exp_sat(self.d, a_opt, b_opt, c_opt)
         return a_opt, b_opt, c_opt, C_fit
 
-    def fit_correct(self):
+    def fit(self):
         try:
             a_opt, b_opt, c_opt, C_fit = self._fit_exponential_saturation()
             self._params = {"exponential_saturation_a": a_opt, "exponential_saturation_b": b_opt, "exponential_saturation_c": c_opt}
@@ -252,9 +285,14 @@ class ExponentialSaturationFit(Fit):
         self._rate_observed_metrics()
         if self.converged:
             self.score()
+
+    def correct(self):
+        if self._converged:
             self._C_corrected = self.C_true + self.params["exponential_saturation_a"] + self.params["exponential_saturation_c"] - self.C_model
-
-
+        else:
+            self._C_corrected = self.C_true
+        return self.C_corrected
+    
     def fraction_not_converged(self, threshold: float = 0.95) -> float:
         """
         The exponential saturation a*(1 - exp(-b*d)) + c asymptotes to a + c.
@@ -309,7 +347,7 @@ class MichaelisMentenFit(Fit):
         C_fit = self.michaelis_menten(self.d, a_opt, b_opt, c_opt)
         return a_opt, b_opt, c_opt, C_fit
 
-    def fit_correct(self):
+    def fit(self):
         try:
             a_opt, b_opt, c_opt, C_fit = self._fit_michaelis_menten()
             self._params = {"michaelis_menten_a": a_opt, "michaelis_menten_b": b_opt, "michaelis_menten_c": c_opt}
@@ -321,8 +359,14 @@ class MichaelisMentenFit(Fit):
         self._rate_observed_metrics()
         if self.converged:
             self.score()
-            self._C_corrected = self.C_true + self.params["michaelis_menten_a"] + self.params["michaelis_menten_c"] - self.C_model
 
+    def correct(self):
+        if self._converged:
+            self._C_corrected = self.C_true + self.params["michaelis_menten_a"] + self.params["michaelis_menten_c"] - self.C_model
+        else:
+            self._C_corrected = self.C_true
+        return self.C_corrected
+    
     def fraction_not_converged(self, threshold: float = 0.95) -> float:
         """
         The Michaelis-Menten function a*d/(b+d) + c asymptotes to a + c.
