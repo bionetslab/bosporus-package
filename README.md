@@ -1,10 +1,6 @@
-## BOSPORUS: BOundary effects in SPatial graphs: errOR modeling and Untangling Strategies
+# BOSPORUS: BOundary effects in SPatial graphs: errOR modeling and Untangling Strategies
 
-Distance functions:
-
-![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.svg?raw=true)
-
-# BOSPORUS: Tutorial — Getting Started with `BosporusFlow`
+## Tutorial — Getting Started with `BosporusFlow`
 
 BOSPORUS (**BO**undary effects in **S**patial graphs: error modeling and **U**ntangling **S**trategies) detects and corrects **boundary effects** in spatial graphs. Nodes close to the border of a tissue sample or point cloud tend to have systematically lower centrality scores than nodes in the center — not because they are biologically different, but because they have fewer neighbours. BOSPORUS models this distance-dependent bias and optionally corrects for it.
 
@@ -31,13 +27,16 @@ BOSPORUS (**BO**undary effects in **S**patial graphs: error modeling and **U**nt
 ---
 
 ## Installation
+Within a conda environment, run
 
 ```bash
 pip install git+https://github.com/bionetslab/bosporus-package.git
 ```
 
-Dependencies (`scikit-learn`, `scipy`, `numpy`, `pandas`) are installed automatically.
-
+Pip dependencies (`scikit-learn`, `scipy`, `numpy`, `pandas`) are installed automatically. Within the environment, you also need to 
+```bash
+conda install graph-tool -c conda-forge
+```
 ---
 
 ## Key concepts
@@ -51,6 +50,10 @@ Dependencies (`scikit-learn`, `scipy`, `numpy`, `pandas`) are installed automati
 | **Correction** | The best-fit model is used to normalize each node's centrality to what it would be in the interior. |
 
 ---
+
+Distance functions:
+![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.svg?raw=true)
+
 
 ## Quick-start: one-liner with `run_all`
 
