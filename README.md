@@ -49,6 +49,16 @@ conda install graph-tool -c conda-forge
 | **Fit model** | A parametric curve (constant, piecewise-linear, exponential saturation, Michaelis-Menten) fitted to `centrality ~ distance`. The best model is selected by AIC. |
 | **Correction** | The best-fit model is used to normalize each node's centrality to what it would be in the interior. |
 
+Entry points / input types:
+![Entry points](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/bosporus_flow.svg?raw=true)
+
+Like its namesake, the Flow class in the Bosporus package enables multiple entry points and flexible branching:
+Purple: Given coordinates, a distance function, a graph operator (Delaunay, k-nearest neighbor, or radius nearest neighbor, and functions for node observations (degree, closeness, clustering coefficients, …).   
+Pink: Given coordinates, a distance function, an edge list, and functions for node observations (degree, closeness, clustering coefficients, …).   
+Yellow: Given coordinates, a distance function, and observations.   
+Green: Given distances and observations.   
+
+
 Distance functions:   
 ![Distance functions](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/distance_functions.svg?raw=true)
 
