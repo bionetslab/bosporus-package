@@ -57,6 +57,10 @@ class Fit():
         self._S_corrected = None
         self._converged = False # not really meaningful to outside
         self._name = None
+        
+        # These are only modified when fits are compared against each other from the Bosporus Flow class
+        self.entropy_AIC_weights = None
+        self.scaled_relative_loglikelihood_over_baseline = None
 
     def __repr__(self):
         status = "converged" if self._converged else ("not fitted" if self._params is None else "failed to converge")
@@ -69,6 +73,20 @@ class Fit():
             f"status={status}, n={n} [{pct} included], "
             f"AIC={aic}, params=[{params}])"
         )
+        
+    def params_summary(self):
+        summary = {
+            "best_fit_type": self._name,
+            "entropy_AIC_weights": self.entropy_AIC_weights,
+            "observed_half_life": self.observed_half_life,
+            "observed_effect_strength": self.observed_effect_strength,
+            "included samples": self.included_samples,
+            "affected samples": self.fraction_not_converged,
+            "scaled_relative_likelihood_over_baseline": self.scaled_relative_loglikelihood_over_baseline,
+            "AIC_weight": self.AIC_weight
+        }
+        summary.update(self.params)
+        return summary
 
     @property
     def included_samples(self):

@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 try:
     from graph_tool.all import Graph
     from graph_tool.centrality import betweenness, pagerank, closeness
@@ -7,7 +8,7 @@ try:
 except ImportError:
     HAS_GRAPH_TOOL = False
 
-def compute_centrality_measures(edge_list, N, measures=["degree", "closeness", "betweenness", "harmonic", "clustering", "pagerank"]):
+def compute_centrality_measures(edge_list, N, measures):
     if not HAS_GRAPH_TOOL:
         raise ImportError(
             "This function requires graph-tool, which must be installed via conda: "
@@ -48,4 +49,4 @@ def compute_centrality_measures(edge_list, N, measures=["degree", "closeness", "
             padded[:len(arr)] = arr
             results[key] = padded
     
-    return {k: list(v) for k, v in results.items()}
+    return pd.DataFrame({k: list(v) for k, v in results.items()})

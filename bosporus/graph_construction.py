@@ -3,6 +3,24 @@ from scipy.spatial import Delaunay
 from sklearn.neighbors import NearestNeighbors
 
 
+def construct_graph(coordinates, graph_type, params=None):
+    if graph_type == "delaunay":
+        edge_list = delaunay_edges(coordinates)
+        
+    elif graph_type == "knn":
+        if params is None or "k" not in params:
+            raise ValueError("For knn graph construction, 'params' must be provided with a key 'k'.")
+
+        edge_list = knn_edges(coordinates, k=params["k"])
+    elif graph_type == "rnn":
+        if params is None or "r" not in params:
+            raise ValueError("For rnn graph construction, 'params' must be provided with a key 'r'.")   
+        edge_list = rnn_edges(coordinates, r=params["r"])
+    else:
+        raise ValueError(f"Unknown graph type: {graph_type}")
+    return edge_list
+    
+    
 def knn_edges(coords, k):
     """Directed, asymmetric kNN on full set."""
     nbrs = NearestNeighbors(n_neighbors=int(k) + 1).fit(coords)
