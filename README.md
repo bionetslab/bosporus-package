@@ -41,14 +41,6 @@ conda install graph-tool -c conda-forge
 
 ## Key concepts
 
-| Term | Meaning |
-|---|---|
-| **Spatial graph** | A graph whose nodes are 2-D (or 3-D) coordinates, connected by edges derived from spatial proximity. |
-| **Boundary effect** | The systematic drop in centrality values for nodes that are near the border of the point cloud. |
-| **Distance function** | A function that assigns every node a scalar "distance to the boundary". BOSPORUS ships four variants. |
-| **Fit model** | A parametric curve (constant, piecewise-linear, exponential saturation, Michaelis-Menten) fitted to `centrality ~ distance`. The best model is selected by AIC. |
-| **Correction** | The best-fit model is used to normalize each node's centrality to what it would be in the interior. |
-
 Entry points / input types:
 ![Entry points](https://github.com/bionetslab/bosporus-package/blob/master/plots_readme/bosporus_flow.svg?raw=true)
 
