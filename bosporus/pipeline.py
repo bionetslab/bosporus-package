@@ -7,12 +7,20 @@ from .fit import ConstantFit, MichaelisMentenFit, PiecewiseLinearFit, Exponentia
 
 
 class BosporusFlow():
-    def __init__(self, coordinates: np.ndarray):
+    def __init__(self, coordinates: np.ndarray = None):
         self.coordinates = coordinates
-        self.df = pd.DataFrame(index=range(len(coordinates)))
+        if coordinates is not None:
+            self.df = pd.DataFrame(index=range(len(coordinates)))
+        else:
+            self.df = pd.DataFrame()
         self.best_fits = None
         self.fit_quality = None
         self.best_fits = dict()
+                
+        if self.coordinates is not None:
+            self.N = len(self.coordinates)
+        else:
+            self.N = None
     
 
     def run_all(self, graph_type, params, distance_function, distance_key=None, measures=["degree", "closeness", "betweenness", "harmonic", "clustering", "pagerank"], fits=[ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit], calculate_rel_ll_to_baseline=ConstantFit):
@@ -22,10 +30,14 @@ class BosporusFlow():
         self.fit_models(measures=measures, distance_key=distance_key, fits=fits, calculate_rel_ll_to_baseline=calculate_rel_ll_to_baseline)
         return self.best_fits
     
+    def set_edge_list(self, edge_list):
+        self.edge_list = edge_list
+        self.N = len(self.df)
     
     def construct_graph(self, graph_type, params=None):
         if graph_type == "delaunay":
             edge_list = delaunay_edges(self.coordinates)
+            
         elif graph_type == "knn":
             if params is None or "k" not in params:
                 raise ValueError("For knn graph construction, 'params' must be provided with a key 'k'.")
@@ -42,7 +54,11 @@ class BosporusFlow():
         return     
     
     def compute_centralities(self, measures):
-        centralities = pd.DataFrame(compute_centrality_measures(self.edge_list, N=len(self.coordinates), measures=measures))
+        centralities = pd.DataFrame(compute_centrality_measures(self.edge_list, N=self.N, measures=measures))
+        self.df = pd.concat([self.df, centralities], axis=1)
+        return
+    
+    def set_custom_centralities(self, centralities: pd.DataFrame):
         self.df = pd.concat([self.df, centralities], axis=1)
         return
     
@@ -66,6 +82,10 @@ class BosporusFlow():
             distance.name = distance_key
         self.df = pd.concat([self.df, distance], axis=1)
         return distance.name
+    
+    def set_custom_distances(self, distance_series: pd.Series):
+        self.df = pd.concat([self.df, distance_series], axis=1)
+        return distance_series.name
     
     def compute_distance_to_rectangular_border(self, distance_key=None):
         distance = distance_to_rectangular_border(self.coordinates)
@@ -116,7 +136,7 @@ class BosporusFlow():
 
             # --- relative likelihoods vs baseline (exclude baseline itself) ---
             rel_ll = {
-                name: np.exp((baseline_aic - aic) / (2 * len(self.coordinates)))
+                name: np.exp((baseline_aic - aic) / (2 * len(d)))
                 for name, aic in aic_dict.items()
                 if name != baseline_name
             }
@@ -137,7 +157,7 @@ class BosporusFlow():
                 "observed_half_life": best_fit.observed_half_life,
                 "observed_effect_strength": best_fit.observed_effect_strength,
                 "included samples": best_fit.included_samples,
-                "affected samples": best_fit.fraction_not_converged()
+                "affected samples": best_fit.fraction_not_converged
             }
             
             row.update(best_fit.params)  # Add best fit parameters to the row

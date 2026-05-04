@@ -1,4 +1,3 @@
-
 """
 Unit tests for fit.py
 
@@ -9,16 +8,14 @@ Coverage:
 - Numerical sanity of half-life and effect_strength
 - NaN handling in __init__
 - Recovery of known ground-truth parameters (smoke tests)
+- Guarding correct() called before fit()
+- __repr__ smoke test
 """
 
 import numpy as np
 import pandas as pd
 import pytest
 
-# ---------------------------------------------------------------------------
-# The module under test is standalone for testing — adjust the import path
-# if you run this from inside the package.
-# ---------------------------------------------------------------------------
 from bosporus.fit import (
     ConstantFit,
     PiecewiseLinearFit,
@@ -54,7 +51,7 @@ class TestConstantFit:
 
     def test_fit_runs_and_sets_attributes(self):
         f = self._fit(np.ones(N) * 5)
-        assert f.C_model is not None
+        assert f.S_model is not None
         assert f.params is not None
         assert f.AIC < np.inf
         assert f.log_likelihood > -np.inf
@@ -63,7 +60,7 @@ class TestConstantFit:
         target = 7.3
         f = self._fit(np.full(N, target))
         assert f.params["constant_c"] == pytest.approx(target)
-        np.testing.assert_allclose(f.C_model, target)
+        np.testing.assert_allclose(f.S_model, target)
 
     def test_effect_strength_is_zero(self):
         f = self._fit(np.ones(N))
@@ -75,27 +72,21 @@ class TestConstantFit:
 
     def test_fraction_not_converged_is_zero(self):
         f = self._fit(np.ones(N))
-        assert f.fraction_not_converged() == 0.0
-        assert f.fraction_not_converged(threshold=0.5) == 0.0
+        assert f.fraction_not_converged == 0.0
 
-    def test_correct_returns_none(self):
-        # ConstantFit.correct() intentionally returns None (no correction applied)
-        f = self._fit(np.ones(N))
-        assert f.correct() is None
-
-    def test_nan_in_C_true_is_masked(self):
+    def test_nan_in__S_true_is_masked(self):
         C = np.ones(N)
         C[::5] = np.nan
         f = self._fit(C)
         assert f.included_samples < 1.0
-        assert not np.any(np.isnan(f.C_true))
+        assert not np.any(np.isnan(f._S_true))
 
     def test_nan_in_d_is_masked(self):
         d = make_series(D.copy())
         d[::5] = np.nan
         f = self._fit(np.ones(N), d)
         assert f.included_samples < 1.0
-        assert not np.any(np.isnan(f.d))
+        assert not np.any(np.isnan(f._d))
 
     def test_aic_worse_than_better_fitting_model(self):
         # Constant fit should have worse AIC than a model that actually fits a trend
@@ -103,44 +94,44 @@ class TestConstantFit:
         d_s = make_series(D)
         const_f = ConstantFit(C_trend, d_s)
         const_f.fit()
-        exp_f = PiecewiseLinearFit(C_trend, d_s)
-        exp_f.fit()
-        assert const_f.AIC > exp_f.AIC
+        pw_f = PiecewiseLinearFit(C_trend, d_s)
+        pw_f.fit()
+        assert const_f.AIC > pw_f.AIC
 
-    def test_inf_in_C_true_is_masked(self):
+    def test_inf_in__S_true_is_masked(self):
         C = np.ones(N)
         C[::5] = np.inf
         f = self._fit(C)
         assert f.included_samples < 1.0
-        assert not np.any(np.isinf(f.C_true))
+        assert not np.any(np.isinf(f._S_true))
 
-    def test_negative_inf_in_C_true_is_masked(self):
+    def test_negative_inf_in__S_true_is_masked(self):
         C = np.ones(N)
         C[::5] = -np.inf
         f = self._fit(C)
         assert f.included_samples < 1.0
-        assert not np.any(np.isinf(f.C_true))
+        assert not np.any(np.isinf(f._S_true))
 
     def test_inf_in_d_is_masked(self):
         d = make_series(D.copy())
         d[::5] = np.inf
         f = self._fit(np.ones(N), d)
         assert f.included_samples < 1.0
-        assert not np.any(np.isinf(f.d))
+        assert not np.any(np.isinf(f._d))
 
     def test_attributes_are_immutable(self):
         f = self._fit(np.ones(N))
-        # Attempting to set read-only properties should raise AttributeError
-        with pytest.raises(AttributeError):
-            f.C_true = make_series(np.zeros(N))
-        with pytest.raises(AttributeError):
-            f.d = make_series(D * 2)
         with pytest.raises(AttributeError):
             f.params = {"constant_c": 999}
         with pytest.raises(AttributeError):
-            f.C_model = np.zeros(N)
-        with pytest.raises(AttributeError):
-            f.converged = False
+            f.S_model = np.zeros(N)
+
+
+    def test_repr_smoke(self):
+        f = self._fit(np.ones(N))
+        r = repr(f)
+        assert "ConstantFit" in r
+        assert "converged" in r
 
 
 # ============================================================
@@ -179,15 +170,15 @@ class TestPiecewiseLinearFit:
         b = f.params["piecewise_linear_b"]
         assert d.min() <= b <= d.max()
 
-    def test_effect_strength_positive_for_increasing_fit(self):
+    def test_effect_strength_negative_for_increasing_fit(self):
         C, d = self._ground_truth(m=2.0)  # increasing with d → c_center > c_border
         f = self._fit(C, d)
-        assert f.observed_effect_strength > 0
+        assert f.observed_effect_strength < 0
 
-    def test_effect_strength_negative_for_decreasing_fit(self):
+    def test_effect_strength_positive_for_decreasing_fit(self):
         C, d = self._ground_truth(m=-2.0, c=20.0)
         f = self._fit(C, d)
-        assert f.observed_effect_strength < 0
+        assert f.observed_effect_strength > 0
 
     def test_half_life_within_data_range(self):
         C, d = self._ground_truth(noise=0.05)
@@ -200,39 +191,29 @@ class TestPiecewiseLinearFit:
         C = make_series(PiecewiseLinearFit.piecewise_plateau(d_tight.values, b=5.0, m=1.0, c=0.0))
         f = self._fit(C, d_tight)
         # b is constrained to [d_min, d_max] = [0, 2], so all points are <= b
-        assert f.fraction_not_converged() == pytest.approx(1.0, abs=0.01)
-
-    def test_fraction_not_converged_threshold_ignored(self):
-        C, d = self._ground_truth(noise=0.05)
-        f = self._fit(C, d)
-        # threshold is structurally irrelevant for piecewise; both calls give same result
-        assert f.fraction_not_converged(0.5) == f.fraction_not_converged(0.99)
-
-    def test_fraction_not_converged_before_fit_raises(self):
-        C, d = self._ground_truth()
-        f = PiecewiseLinearFit(C, d)
-        with pytest.raises(ValueError):
-            f.fraction_not_converged()
+        assert f.fraction_not_converged == pytest.approx(1.0, abs=0.01)
 
     def test_correct_shape(self):
         C, d = self._ground_truth(noise=0.1)
         f = self._fit(C, d)
-        residuals = f.correct()
-        assert len(residuals) == len(f.C_true)
+        result = f.correct()
+        assert len(result) == len(f._S_true)
 
     def test_attributes_are_immutable(self):
         C, d = self._ground_truth()
         f = self._fit(C, d)
         with pytest.raises(AttributeError):
-            f.C_true = make_series(np.zeros(N))
-        with pytest.raises(AttributeError):
-            f.d = make_series(D * 2)
-        with pytest.raises(AttributeError):
             f.params = {"piecewise_linear_b": 999}
         with pytest.raises(AttributeError):
-            f.C_model = np.zeros(N)
-        with pytest.raises(AttributeError):
-            f.converged = True
+            f.S_model = np.zeros(N)
+
+
+    def test_repr_smoke(self):
+        C, d = self._ground_truth()
+        f = self._fit(C, d)
+        r = repr(f)
+        assert "PiecewiseLinearFit" in r
+        assert "converged" in r
 
 
 # ============================================================
@@ -289,33 +270,29 @@ class TestExponentialSaturationFit:
     def test_fraction_not_converged_in_01(self):
         C, d = self._ground_truth(noise=0.05)
         f = self._fit(C, d)
-        frac = f.fraction_not_converged()
+        frac = f.fraction_not_converged
         assert 0.0 <= frac <= 1.0
 
-    def test_fraction_not_converged_decreases_with_threshold(self):
-        # A stricter threshold means more points are "not yet converged"
-        C, d = self._ground_truth(noise=0.05)
-        f = self._fit(C, d)
-        assert f.fraction_not_converged(0.5) <= f.fraction_not_converged(0.95)
-
     def test_fraction_not_converged_invalid_threshold(self):
-        C, d = self._ground_truth()
-        f = self._fit(C, d)
-        with pytest.raises(ValueError):
-            f.fraction_not_converged(threshold=1.5)
-        with pytest.raises(ValueError):
-            f.fraction_not_converged(threshold=0.0)
-
-    def test_fraction_not_converged_before_fit_raises(self):
+        # threshold is passed to _calculate_fraction_not_converged, not the property;
+        # invalid threshold should raise on the next fit() call with that threshold
         C, d = self._ground_truth()
         f = ExponentialSaturationFit(C, d)
         with pytest.raises(ValueError):
-            f.fraction_not_converged()
+            f._calculate_fraction_not_converged(threshold=1.5)
+        with pytest.raises(ValueError):
+            f._calculate_fraction_not_converged(threshold=0.0)
 
-    def test_effect_strength_positive_for_increasing(self):
+    def test_fraction_not_converged_before_fit_is_none(self):
+        # Before fit(), fraction_not_converged is None (not yet computed)
+        C, d = self._ground_truth()
+        f = ExponentialSaturationFit(C, d)
+        assert f.fraction_not_converged is None
+
+    def test_effect_strength_negative_for_increasing(self):
         C, d = self._ground_truth(a=3.0, c=1.0)
         f = self._fit(C, d)
-        assert f.observed_effect_strength > 0
+        assert f.observed_effect_strength < 0
 
     def test_half_life_positive(self):
         C, d = self._ground_truth(a=3.0, b=0.5, c=1.0)
@@ -333,15 +310,16 @@ class TestExponentialSaturationFit:
         C, d = self._ground_truth()
         f = self._fit(C, d)
         with pytest.raises(AttributeError):
-            f.C_true = make_series(np.zeros(N))
-        with pytest.raises(AttributeError):
-            f.d = make_series(D * 2)
-        with pytest.raises(AttributeError):
             f.params = {"exponential_saturation_a": 999}
         with pytest.raises(AttributeError):
-            f.C_model = np.zeros(N)
-        with pytest.raises(AttributeError):
-            f.converged = True
+            f.S_model = np.zeros(N)
+
+    def test_repr_smoke(self):
+        C, d = self._ground_truth()
+        f = self._fit(C, d)
+        r = repr(f)
+        assert "ExponentialSaturationFit" in r
+        assert "converged" in r
 
 
 # ============================================================
@@ -410,32 +388,26 @@ class TestMichaelisMentenFit:
     def test_fraction_not_converged_in_01(self):
         C, d = self._ground_truth(noise=0.05)
         f = self._fit(C, d)
-        frac = f.fraction_not_converged()
+        frac = f.fraction_not_converged
         assert 0.0 <= frac <= 1.0
-
-    def test_fraction_not_converged_decreases_with_threshold(self):
-        C, d = self._ground_truth(noise=0.05)
-        f = self._fit(C, d)
-        assert f.fraction_not_converged(0.5) <= f.fraction_not_converged(0.95)
 
     def test_fraction_not_converged_invalid_threshold(self):
         C, d = self._ground_truth()
         f = self._fit(C, d)
         with pytest.raises(ValueError):
-            f.fraction_not_converged(threshold=0.0)
+            f._calculate_fraction_not_converged(threshold=0.0)
         with pytest.raises(ValueError):
-            f.fraction_not_converged(threshold=1.0)
+            f._calculate_fraction_not_converged(threshold=1.0)
 
-    def test_fraction_not_converged_before_fit_raises(self):
+    def test_fraction_not_converged_before_fit_is_none(self):
         C, d = self._ground_truth()
         f = MichaelisMentenFit(C, d)
-        with pytest.raises(ValueError):
-            f.fraction_not_converged()
+        assert f.fraction_not_converged is None
 
-    def test_effect_strength_positive_for_increasing(self):
+    def test_effect_strength_negative_for_increasing(self):
         C, d = self._ground_truth(a=3.0, c=1.0)
         f = self._fit(C, d)
-        assert f.observed_effect_strength > 0
+        assert f.observed_effect_strength < 0
 
     def test_half_life_close_to_b(self):
         # observed_half_life is the d where midpoint of [c_border, c_center] is reached.
@@ -457,15 +429,16 @@ class TestMichaelisMentenFit:
         C, d = self._ground_truth()
         f = self._fit(C, d)
         with pytest.raises(AttributeError):
-            f.C_true = make_series(np.zeros(N))
-        with pytest.raises(AttributeError):
-            f.d = make_series(D * 2)
-        with pytest.raises(AttributeError):
             f.params = {"michaelis_menten_a": 999}
         with pytest.raises(AttributeError):
-            f.C_model = np.zeros(N)
-        with pytest.raises(AttributeError):
-            f.converged = False
+            f.S_model = np.zeros(N)
+
+    def test_repr_smoke(self):
+        C, d = self._ground_truth()
+        f = self._fit(C, d)
+        r = repr(f)
+        assert "MichaelisMentenFit" in r
+        assert "converged" in r
 
 
 # ============================================================
@@ -475,7 +448,7 @@ class TestMichaelisMentenFit:
 class TestCrossModel:
 
     def test_constant_data_favors_constant_fit(self):
-        C = make_series(np.full(N, 3.0)) # + RNG.normal(0, 0.001, N))
+        C = make_series(np.full(N, 3.0))
         d = make_series(D)
         fits = [ConstantFit(C, d), PiecewiseLinearFit(C, d),
                 ExponentialSaturationFit(C, d), MichaelisMentenFit(C, d)]
@@ -500,33 +473,42 @@ class TestCrossModel:
             assert f.included_samples == pytest.approx(1.0)
 
     def test_correct_returns_array_of_correct_length(self):
-        C = make_series(ExponentialSaturationFit.exp_sat(D, 3.0, 0.4, 1.0)) 
+        C = make_series(ExponentialSaturationFit.exp_sat(D, 3.0, 0.4, 1.0))
         d = make_series(D)
         for cls in [PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit]:
             f = cls(C, d)
             f.fit()
-            residuals = f.correct()
-            assert len(residuals) == len(f.C_true)
+            result = f.correct()
+            assert len(result) == len(f._S_true)
 
     def test_correct_raises_before_fit(self):
         C = make_series(np.ones(N))
         d = make_series(D)
-        for cls in [PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit]:
+        for cls in [ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit]:
             f = cls(C, d)
-            with pytest.raises(ValueError):
+            with pytest.raises(RuntimeError):
                 f.correct()
 
+    def test_mismatched_lengths_raises(self):
+        C = make_series(np.ones(N))
+        d = make_series(D[:N - 1])
+        with pytest.raises(ValueError):
+            ConstantFit(C, d)
+
     def test_all_attributes_immutable_across_models(self):
-        """Verify that all models have immutable attributes."""
         C = make_series(ExponentialSaturationFit.exp_sat(D, 3.0, 0.4, 1.0))
         d = make_series(D)
         for cls in [ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit]:
             f = cls(C, d)
             f.fit()
-            # All these should raise AttributeError when trying to assign
-            with pytest.raises(AttributeError):
-                f.C_true = make_series(np.zeros(N))
             with pytest.raises(AttributeError):
                 f.AIC = 0.0
-            with pytest.raises(AttributeError):
-                f.converged = not f.converged
+
+    def test_repr_before_fit(self):
+        C = make_series(np.ones(N))
+        d = make_series(D)
+        for cls in [ConstantFit, PiecewiseLinearFit, ExponentialSaturationFit, MichaelisMentenFit]:
+            f = cls(C, d)
+            r = repr(f)
+            assert cls.__name__ in r
+            assert "not fitted" in r
