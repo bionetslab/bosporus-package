@@ -17,8 +17,10 @@ dependencies = ["scikit-learn",
                 "scipy",
                 "numpy",
                 "pandas"]
+
 [project.optional-dependencies]
 dev = ["pytest"]
+graph = ["graph-tool"] # this will fail, only to document intent
 
 [project.urls]
 Homepage = "https://github.com/bionetslab/bosporus-package"

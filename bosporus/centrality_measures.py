@@ -1,15 +1,19 @@
 import numpy as np
 try:
     from graph_tool.all import Graph
+    from graph_tool.centrality import betweenness, pagerank, closeness
+    from graph_tool.clustering import local_clustering
     HAS_GRAPH_TOOL = True
 except ImportError:
     HAS_GRAPH_TOOL = False
-    
-from graph_tool.centrality import betweenness, pagerank, closeness
-from graph_tool.clustering import local_clustering
-
 
 def compute_centrality_measures(edge_list, N, measures=["degree", "closeness", "betweenness", "harmonic", "clustering", "pagerank"]):
+    if not HAS_GRAPH_TOOL:
+        raise ImportError(
+            "This function requires graph-tool, which must be installed via conda: "
+            "conda install -c conda-forge graph-tool"
+        )
+    
     g = Graph(directed=False)
     g.add_edge_list(edge_list)
     

@@ -1,10 +1,9 @@
 from .graph_construction import delaunay_edges, knn_edges, rnn_edges
-from .centrality_measures import compute_centrality_measures
 from .distances import distance_to_convex_hull, distance_to_pointset, distance_to_mask, distance_to_rectangular_border
 import numpy as np
 import pandas as pd
 from .fit import ConstantFit, MichaelisMentenFit, PiecewiseLinearFit, ExponentialSaturationFit
-
+from .centrality_measures import compute_centrality_measures
 
 class BosporusFlow():
     def __init__(self, coordinates: np.ndarray = None):

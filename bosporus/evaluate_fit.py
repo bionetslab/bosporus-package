@@ -1,5 +1,4 @@
 import numpy as np 
-import pandas as pd
 
 def log_likelihood(C_true, C_pred):
     n = len(C_true)
